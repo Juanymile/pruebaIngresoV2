@@ -1,0 +1,157 @@
+nuevo
+ using (var db = new contex_incaprosa())
+            {
+                object[] parametros = {
+                    new SqlParameter("@serie", model.serie),
+                    new SqlParameter("@numero", numero),
+                    new SqlParameter("@cod_caja",model.cod_caja),
+                    new SqlParameter("@cod_usuario",cod_usuario),
+                    new SqlParameter("@cod_cliente",model.cod_cliente),
+                    new SqlParameter("@cod_motivo",motivo),
+                    new SqlParameter("@cod_moneda", moneda),
+                    new SqlParameter("@fecha",fecha),
+                    new SqlParameter("@referencia",referencia),
+                    new SqlParameter("@aplicar_iva_retenido",true),
+                    new SqlParameter("@cod_empresa",empresa),
+                    new SqlParameter("@cod_sucursal_cliente", model.cod_sucursal_cliente),
+                    new SqlParameter("@cod_sucursal",sucursal),
+                    new SqlParameter("@cod_condicion_pago",1),
+                    new SqlParameter("@hash", SqlDbType.NVarChar,-1) {Direction = ParameterDirection.Output}
+            };
+                db.Database.ExecuteSqlCommand("sp_facturacion_agregar_notacredito @serie,@numero,@cod_caja,@cod_usuario,@cod_cliente,@cod_motivo,@cod_moneda,@fecha,@referencia,@aplicar_iva_retenido,@cod_empresa,@cod_sucursal,@cod_sucursal_cliente,@cod_condicion_pago,@hash OUT", parametros);
+
+
+--------------------
+<asp:SqlDataSource ID="SqlPrincipal" runat="server" ConnectionString="<%$ ConnectionStrings:ConnStr %>"
+                SelectCommand="SELECT * FROM vw_facturacion WHERE ([codigo] = @codigo)"
+                InsertCommandType="StoredProcedure" InsertCommand="sp_facturacion_agregar_NC" OnInserted="SqlPrincipal_Inserted"
+                UpdateCommandType="StoredProcedure" UpdateCommand="sp_facturacion_editar_NC" OnUpdated="SqlPrincipal_Updated">
+                <InsertParameters>
+                    <asp:Parameter Direction="ReturnValue" Name="RETURN_VALUE" Type="Int32" />
+                    <asp:Parameter Name="cod_serie" Type="Int32" />
+                    <asp:Parameter Name="numero" Type="Int32" />
+<%--                 <asp:CookieParameter Name="cod_bodega" CookieName="cod_caja" Type="Int32" />--%>
+                    <asp:Parameter Name="cod_condicion_pago" Type="Int32" />
+                    <%--<asp:Parameter Name="cod_caja" Type="Int32" />--%>
+                    <asp:Parameter Name="cod_motivo" Type="Int32" />
+                    <asp:Parameter Name="cod_cliente" Type="Int32" />
+                    <asp:Parameter Name="fecha" Type="DateTime" />
+                    <asp:Parameter Name="referencia" Type="String" />
+                    <asp:Parameter Name="aplicar_iva_retenido" Type="Boolean" />
+                    <asp:Parameter Name="cod_usuario" Type="Int32" />                    
+                    <asp:CookieParameter CookieName="cod_empresa" Name="cod_empresa" Type="Int32" />
+                    <asp:CookieParameter CookieName="cod_sucursal" Name="cod_sucursal" Type="Int32" />
+                </InsertParameters>
+                <SelectParameters>
+                    <asp:QueryStringParameter Name="codigo" QueryStringField="codigo" Type="Int32" />
+                </SelectParameters>
+                <UpdateParameters>
+                    <asp:QueryStringParameter Name="codigo" QueryStringField="codigo" Type="Int32" />
+                    <asp:Parameter Name="fecha" Type="DateTime" />
+                    <asp:Parameter Name="cod_condicion_pago" Type="Int32" />
+                    <asp:Parameter Name="referencia" Type="String" />
+                    <asp:Parameter Name="aplicar_iva_retenido" Type="Boolean" />
+                    <asp:Parameter Direction="ReturnValue" Name="RETURN_VALUE" Type="Int32" />
+                    <asp:Parameter Name="cod_usuario" Type="Int32" />
+                    <asp:Parameter Name="cod_cliente" Type="Int32" />
+                    <asp:Parameter Name="cod_motivo" Type="Int32" />
+                </UpdateParameters>
+            </asp:SqlDataSource>
+
+<asp:DetailsView ID="dtvw_Principal" runat="server" DataSourceID="SqlPrincipal" CssClass="table table-borderless" BorderWidth="0px" AutoGenerateRows="false" OnItemCommand="dtvw_Principal_ItemCommand">
+                <Fields>
+                    <asp:TemplateField HeaderText="Código" ShowHeader="False" SortExpression="codigo">
+                        
+                        <InsertItemTemplate>
+<EditItemTemplate>
+
+
+    protected void dtvw_Principal_ItemCommand(object sender, DetailsViewCommandEventArgs e)
+    {
+        //Si el comando es New, recarga la pagina.
+        if (e.CommandName == "Edit")
+        {
+            dtvw_Principal.DefaultMode = DetailsViewMode.Edit;
+        }
+        if (e.CommandName == "New")
+        {
+            Response.Redirect("notadecreditodet.aspx?action=1");
+        }
+
+        if (e.CommandName == "Cancel")
+        {
+            if (!string.IsNullOrEmpty(Request.QueryString["action"]))
+                Response.Redirect("../../NotaCredito");
+            else
+                Response.Redirect(Request.RawUrl, false);
+        }
+    }
+
+   protected void SqlPrincipal_Inserted(object sender, SqlDataSourceStatusEventArgs e)
+    {
+        if (e.Exception == null)
+        {
+            //Actualiza la bitacora despues de actualizar.
+            bitacora.strAccion = "Se ha agregado un nuevo documento: " + (dtvw_Principal.FindControl("ddlSerie") as DropDownList).SelectedItem.Text + e.Command.Parameters["@numero"].Value;
+            bitacora.agregar();
+
+            //Redirecciona la creación.
+            Response.Redirect("notadecreditodet.aspx?codigo=" + e.Command.Parameters["@RETURN_VALUE"].Value);
+
+        }
+        else
+        {
+            //Show error message
+            bitacora.strAccion = "notadecreditodet.aspx :: SqlPrincipal_Inserted() :: " + e.Exception.Message;
+            bitacora.agregar();
+
+            //Set the exception handled property so it doesn't bubble-up
+            e.ExceptionHandled = true;
+
+            //Actualiza la pagina.
+            Response.Redirect(Request.RawUrl, false);
+        }
+    }
+    protected void SqlPrincipal_Updated(object sender, SqlDataSourceStatusEventArgs e)
+    {
+        if (e.Exception == null)
+        {
+            //Actualiza la bitacora despues de actualizar.
+            bitacora.strAccion = "Se ha actualizado la factura.";
+            bitacora.agregar();
+        }
+        else
+        {
+            //Show error message
+            bitacora.strAccion = e.Exception.Message;
+            bitacora.agregar();
+
+            //Set the exception handled property so it doesn't bubble-up
+            e.ExceptionHandled = true;
+
+        }
+
+        //Actualiza la pagina.
+        Response.Redirect(Request.RawUrl, false);
+
+    }
+
+-------------------------------
+
+Laravel 
+laravel new *****
+php artisan make:model Product -m
+
+php artisan migrate
+composer require ibex/crud-generator --dev
+php artisan vendor:publish --tag=crud
+php artisan make:crud products
+y
+---routes.php/web.php
+Route::resource('products', ProductController::class);
+
+composer require laravel/ui
+php artisan ui bootstrap
+php artisan ui bootstrap --auth
+y
+npm install && npm run dev
